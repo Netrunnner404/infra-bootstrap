@@ -332,6 +332,7 @@ This ensures the playbook can be re-run safely without introducing unnecessary c
 - reachable over SSH
 - user with sudo privileges
 
+If SSH is not installed yet, an initial pre-bootstrap step is required first (for example via provider console, hypervisor console, cloud-init, or image preparation).
 ---
 
 ## Running Locally
