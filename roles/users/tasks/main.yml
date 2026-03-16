@@ -1,0 +1,25 @@
+---
+- name: Create devops user
+  ansible.builtin.user:
+    name: devops
+    state: present
+    groups: sudo
+    shell: /bin/bash
+  become: true
+
+- name: Ensure .ssh directory exists for devops
+  ansible.builtin.file:
+    path: /home/devops/.ssh
+    state: directory
+    owner: devops
+    group: devops
+    mode: '0700'
+  become: true
+
+- name: Add authorized SSH key for devops
+  ansible.posix.authorized_key:
+    user: devops
+    key: "{{ devops_ssh_key }}"
+    state: present
+  when: devops_ssh_key is defined
+  become: true

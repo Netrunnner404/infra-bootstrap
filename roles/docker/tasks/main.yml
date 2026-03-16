@@ -1,0 +1,64 @@
+---
+- name: Install prerequisites for Docker repository
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Add Docker repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.sources
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: https://download.docker.com/linux/ubuntu
+      Suites: {{ ansible_facts['distribution_release'] }}
+      Components: stable
+      Signed-By: /etc/apt/keyrings/docker.asc
+  register: docker_repo_file
+
+- name: Refresh apt cache after adding Docker repository  # noqa: no-handler
+  ansible.builtin.apt:
+    update_cache: true
+  when: docker_repo_file.changed
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Ensure Docker service is enabled and started
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+  when: ansible_facts['virtualization_type'] != "docker"
+
+- name: Start Docker daemon in background (Molecule only)
+  ansible.builtin.shell: "pgrep dockerd || dockerd > /tmp/dockerd.log 2>&1 &"
+  args:
+    executable: /bin/bash
+  async: 0
+  poll: 0
+  changed_when: false
+  when: ansible_facts['virtualization_type'] == "docker"

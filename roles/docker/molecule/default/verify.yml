@@ -1,0 +1,13 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Check system uptime
+      ansible.builtin.command: uptime
+      register: docker_uptime_result
+      changed_when: false
+
+    - name: Show uptime
+      ansible.builtin.debug:
+        var: docker_uptime_result.stdout

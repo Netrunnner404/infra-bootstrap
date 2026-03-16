@@ -1,0 +1,2 @@
+devops_ssh_key: "ssh-ed25519 AAAA..."
+ansible_become_password: "your_sudo_password"

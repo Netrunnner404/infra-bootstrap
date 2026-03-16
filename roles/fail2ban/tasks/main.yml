@@ -1,0 +1,12 @@
+---
+- name: Install fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+
+- name: Enable fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+  when: ansible_facts.get('ansible_service_mgr', 'unknown') not in ['unknown', '']

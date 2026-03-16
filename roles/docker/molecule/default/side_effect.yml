@@ -1,0 +1,8 @@
+---
+- name: Side effect test
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Dummy side effect check
+      ansible.builtin.debug:
+        msg: "No side effects to test"

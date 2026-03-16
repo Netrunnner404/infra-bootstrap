@@ -1,0 +1,22 @@
+---
+- name: Verify production server
+  hosts: servers
+  become: true
+
+  tasks:
+    - name: Copy verify script
+      ansible.builtin.copy:
+        src: verify_server_remote.sh
+        dest: /tmp/verify_server_remote.sh
+        mode: "0755"
+
+    - name: Run verify script
+      ansible.builtin.shell: /tmp/verify_server_remote.sh
+      args:
+        executable: /bin/bash
+      register: verify_output
+      changed_when: false
+
+    - name: Show verify output
+      ansible.builtin.debug:
+        msg: "{{ verify_output.stdout_lines }}"

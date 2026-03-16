@@ -1,0 +1,35 @@
+---
+dependency:
+  name: galaxy
+
+driver:
+  name: docker
+
+platforms:
+  - name: test-server
+    image: ubuntu:24.04
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - ${MOLECULE_PROJECT_DIRECTORY}/../../:/ansible
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_CONFIG: ${MOLECULE_PROJECT_DIRECTORY}/../../ansible.cfg
+    ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/../../roles
+  playbooks:
+    converge: ${MOLECULE_PROJECT_DIRECTORY}/../../playbooks/bootstrap.yml
+
+verifier:
+  name: ansible
+
+scenario:
+  name: all_roles
+  test_sequence:
+    - destroy
+    - create
+    - converge
+    - idempotence
+    - verify
+    - destroy

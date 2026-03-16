@@ -1,0 +1,13 @@
+---
+- name: Create infrastructure directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: devops
+    group: devops
+    mode: "0755"
+  loop:
+    - /opt/docker
+    - /opt/docker/stacks
+    - /opt/backups
+    - /opt/logs

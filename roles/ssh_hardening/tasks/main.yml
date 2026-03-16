@@ -1,0 +1,40 @@
+---
+- name: Install OpenSSH server
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+    update_cache: true
+
+- name: Ensure sshd_config exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config
+    state: file
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Disable root SSH login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    create: true
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Disable password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    create: true
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Restart SSH
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  when: ansible_facts.get('ansible_service_mgr', 'unknown') not in ['unknown', '']

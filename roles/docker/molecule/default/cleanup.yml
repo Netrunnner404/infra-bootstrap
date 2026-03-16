@@ -1,0 +1,8 @@
+---
+- name: Cleanup
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Cleanup message
+      ansible.builtin.debug:
+        msg: "Cleanup tasks completed"

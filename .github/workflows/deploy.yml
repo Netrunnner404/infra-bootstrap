@@ -1,0 +1,129 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, test-runner]
+    if: github.ref == 'refs/heads/master'
+    timeout-minutes: 20
+    environment:
+      name: production
+
+    steps:
+      - name: Ensure master branch
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/master" ]; then
+            echo "Deploy allowed only from master"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Create dummy pip cache file
+        run: touch .python-pip-cache
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: .python-pip-cache
+
+      - name: Install Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core
+          ansible-galaxy collection install ansible.posix community.general
+
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.SERVER_IP }}" ]; then
+            echo "SERVER_IP missing"; exit 1; fi
+          if [ -z "${{ secrets.SERVER_USER }}" ]; then
+            echo "SERVER_USER missing"; exit 1; fi
+          if [ -z "${{ secrets.BOOTSTRAP_SSH_KEY }}" ]; then
+            echo "BOOTSTRAP_SSH_KEY missing"; exit 1; fi
+          if [ -z "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" ]; then
+            echo "ANSIBLE_VAULT_PASSWORD missing"; exit 1; fi
+          if [ -z "${{ secrets.DEVOPS_PUBLIC_KEY }}" ]; then
+            echo "DEVOPS_PUBLIC_KEY missing"; exit 1; fi
+          if [ -z "${{ secrets.SERVER_SUDO_PASSWORD }}" ]; then
+            echo "SERVER_SUDO_PASSWORD missing"; exit 1; fi
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BOOTSTRAP_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Configure SSH
+        run: |
+          cat <<EOF > ~/.ssh/config
+          Host *
+            IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Add server to known_hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Create temporary inventory
+        run: |
+          mkdir -p inventory
+          cat <<EOF > inventory/ci.ini
+          [servers]
+          prod ansible_host=${{ secrets.SERVER_IP }} ansible_user=${{ secrets.SERVER_USER }}
+          EOF
+
+      - name: Create temporary vault
+        run: |
+          mkdir -p inventory/group_vars/all
+          cat <<EOF > inventory/group_vars/all/vault.yml
+          devops_ssh_key: "${{ secrets.DEVOPS_PUBLIC_KEY }}"
+          ansible_become_password: "${{ secrets.SERVER_SUDO_PASSWORD }}"
+          EOF
+
+          ansible-vault encrypt inventory/group_vars/all/vault.yml \
+            --vault-password-file <(echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}")
+
+      - name: Deploy infrastructure
+        run: |
+          ansible-playbook \
+            -i inventory/ci.ini \
+            playbooks/bootstrap.yml \
+            --vault-password-file <(echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}") \
+            --become
+
+      - name: Check idempotency
+        run: |
+          ansible-playbook \
+            -i inventory/ci.ini \
+            playbooks/bootstrap.yml \
+            --vault-password-file <(echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}") \
+            --become \
+            --check
+
+      - name: Verify infrastructure
+        run: |
+          ansible-playbook \
+            -i inventory/ci.ini \
+            playbooks/verify.yml \
+            --vault-password-file <(echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}")
+
+      - name: Cleanup temporary inventory
+        if: always()
+        run: rm -rf inventory

@@ -1,0 +1,16 @@
+---
+- name: Bootstrap production server
+  hosts: all
+  become: true
+  vars_files:
+    - ../inventory/group_vars/all/vault.yml
+
+  roles:
+    - common
+    - users
+    - ssh_hardening
+    - firewall
+    - fail2ban
+    - auto_updates
+    - docker
+    - directories

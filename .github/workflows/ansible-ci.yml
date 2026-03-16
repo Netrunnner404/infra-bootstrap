@@ -1,0 +1,105 @@
+---
+name: Ansible CI/CD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ansible-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+# LINT + SYNTAX CHECK
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Create dummy pip cache file
+        run: touch .python-pip-cache
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: .python-pip-cache
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core ansible-lint yamllint
+          ansible-galaxy collection install ansible.posix community.general
+
+      - name: Check Ansible version
+        run: ansible --version
+
+      - name: Run yamllint
+        run: yamllint .
+
+      - name: Run ansible-lint
+        run: ansible-lint
+
+      # Run security scan (ansible-lint only)
+      - name: Security scan
+        run: ansible-lint -t security roles/
+
+      - name: Syntax check
+        run: |
+          ansible-playbook \
+            playbooks/bootstrap.yml \
+            --syntax-check \
+            -i inventory/hosts.yml
+
+# MOLECULE TESTS
+  molecule:
+    runs-on: ubuntu-latest
+    needs: lint
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Create dummy pip cache file
+        run: touch .python-pip-cache
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: .python-pip-cache
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core ansible-lint molecule molecule-docker docker
+          ansible-galaxy collection install ansible.posix community.general community.docker
+
+      - name: Check Docker
+        run: |
+          sudo systemctl start docker || true
+          docker info
+
+      - name: Run Molecule tests
+        working-directory: roles/docker
+        env:
+          HOME: /home/runner
+          ANSIBLE_FORCE_COLOR: "1"
+        run: |
+          CREATE_YML=$(python3 -c "import os, molecule_docker; print(os.path.join(os.path.dirname(molecule_docker.__file__), 'playbooks', 'create.yml'))")
+          DESTROY_YML=$(python3 -c "import os, molecule_docker; print(os.path.join(os.path.dirname(molecule_docker.__file__), 'playbooks', 'destroy.yml'))")
+
+          sed -i "s/when: (lookup('env', 'HOME'))/when: lookup('env', 'HOME') is string and lookup('env', 'HOME') != ''/" "$CREATE_YML"
+          sed -i "s/when: (lookup('env', 'HOME'))/when: lookup('env', 'HOME') is string and lookup('env', 'HOME') != ''/" "$DESTROY_YML"
+
+          molecule test -s all_roles --destroy=always

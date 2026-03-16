@@ -1,0 +1,26 @@
+---
+- name: Verify server configuration
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Make verify_server_molecule.sh executable
+      ansible.builtin.file:
+        path: /ansible/verify_server_molecule.sh   # Path to the file in the container
+        mode: '0755'
+
+    - name: Run verify_server_molecule.sh
+      ansible.builtin.shell: /ansible/verify_server_molecule.sh
+      args:
+        executable: /bin/bash
+      register: docker_verify_output
+      changed_when: false   # We do not consider the execution of a script to be a system modification
+
+    - name: Show verify stdout
+      ansible.builtin.debug:
+        var: docker_verify_output.stdout_lines
+
+    - name: Show verify stderr
+      ansible.builtin.debug:
+        var: docker_verify_output.stderr_lines
+      when: docker_verify_output.stderr_lines | length > 0
